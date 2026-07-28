@@ -1,0 +1,36 @@
+{
+  "name": "naturalcli",
+  "version": "1.0.0",
+  "description": "A futuristic AI terminal experience built with React, Tailwind, and Framer Motion.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^2.13.0",
+    "@vitejs/plugin-react": "^6.0.4",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "framer-motion": "^12.43.0",
+    "lucide-react": "^1.27.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "remark-gfm": "^4.0.1",
+    "vite": "^8.1.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.24",
+    "tailwindcss": "^3.4.17"
+  }
+}

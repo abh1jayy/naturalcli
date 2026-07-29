@@ -14,6 +14,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log(`>> [Serverless API] ${req.method} ${req.url}`);
+    console.log('>> [Serverless API] body preview:', JSON.stringify(req.body).slice(0, 2000));
     const { prompt } = req.body;
 
     if (!prompt) {
@@ -23,14 +25,19 @@ export default async function handler(req, res) {
       });
     }
 
+    console.log('>> [Gemini] calling model', 'gemini-3.5-flash-lite');
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
+    console.log('<< [Gemini] raw response:', response);
+
+    const replyText = (response && (response.text || response.outputText || response.response || response[0]?.text)) || JSON.stringify(response);
+
     res.status(200).json({
       success: true,
-      reply: response.text,
+      reply: replyText,
     });
 
   } catch (error) {

@@ -25,6 +25,15 @@ if (process.env.GEMINI_API_KEY) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "dist")));
 
+// Detailed incoming-request logging for debugging
+app.use((req, res, next) => {
+  console.log(`>> [HTTP] ${req.method} ${req.url}`);
+  if (req.method === 'POST' || req.method === 'PUT') {
+    console.log('>> [HTTP] body preview:', JSON.stringify(req.body).slice(0, 2000));
+  }
+  next();
+});
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
@@ -58,14 +67,24 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
+    console.log('>> [Gemini] calling model', 'gemini-3.5-flash-lite');
+    console.log('>> [Gemini] request contents preview:', String(prompt).slice(0, 2000));
+
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
+    console.log('<< [Gemini] raw response:', response);
+
+    // Guard: attempt to extract text in multiple possible fields
+    const replyText = (response && (response.text || response.outputText || response.response || response[0]?.text)) || JSON.stringify(response);
+
+    console.log('<< [API] sending reply preview:', String(replyText).slice(0, 2000));
+
     res.json({
       success: true,
-      reply: response.text,
+      reply: replyText,
     });
 
   } catch (err) {

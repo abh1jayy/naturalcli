@@ -248,8 +248,8 @@ export default function App() {
               <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${isDark ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-emerald-400/20 bg-emerald-50 text-emerald-600'}`}>
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Online
               </div>
-              <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${isDark ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : 'border-cyan-400/20 bg-cyan-50 text-cyan-700'}`}>
-                <span className="font-medium">Gemini 3.6</span>
+                <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${isDark ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : 'border-cyan-400/20 bg-cyan-50 text-cyan-700'}`}>
+                <span className="font-medium">Gemini 3.5 (Flash Lite)</span>
               </div>
               <button
                 onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}

@@ -120,7 +120,7 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
         </div>
       )}
 
-      <div className={`max-w-[90%] lg:max-w-[1100px] rounded-3xl border px-4 py-3 backdrop-blur-xl ${isUser ? 'border-cyan-400/20 bg-cyan-400/10 text-slate-100' : 'border-white/10 bg-slate-950/60 text-slate-100'}`}>
+      <div className={`max-w-[90%] lg:max-w-[1100px] rounded-3xl border px-4 py-3 backdrop-blur-xl ${isUser ? 'border-cyan-400/20 bg-cyan-400/10 text-slate-900 dark:text-slate-100 dark:bg-cyan-400/10' : 'border-slate-200 bg-slate-50 text-slate-900 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100'}`}>
         <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.32em] text-slate-400">
           {isUser ? <UserRound size={13} /> : <Sparkles size={13} />}
           {isUser ? 'You' : 'NaturalCLI'}
@@ -149,7 +149,7 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
                     return renderCodeBlock(codeString, 'text');
                   }
 
-                  return <code className="rounded bg-white/10 px-1.5 py-1 text-sm text-cyan-200">{children}</code>;
+                  return <code className="rounded bg-slate-100 px-1.5 py-1 text-sm text-slate-900 dark:bg-white/10 dark:text-cyan-200">{children}</code>;
                 },
               }}
             >

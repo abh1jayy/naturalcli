@@ -227,7 +227,7 @@ export default function App() {
   return (
     <div className={`min-h-screen transition-colors duration-500 ${isDark ? 'bg-[#050816] text-slate-100' : 'bg-[#f5f7ff] text-slate-900'}`}>
       <AnimatedBackground />
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+      <div className="w-[96%] mx-auto flex min-h-screen flex-col px-6 lg:px-10 py-4">
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -301,15 +301,15 @@ export default function App() {
           )}
         </motion.header>
 
-        <div className="mt-4 flex flex-1 gap-4">
+        <div className="mt-4 flex flex-1 gap-6">
           <motion.main
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex-1 rounded-[30px] border p-3 backdrop-blur-xl shadow-[0_30px_90px_rgba(2,6,23,0.32)] ${isDark ? 'border-white/10 bg-slate-950/50' : 'border-slate-200 bg-white/70'}`}
+            className={`flex-1 min-w-0 rounded-[30px] border p-3 backdrop-blur-xl shadow-[0_30px_90px_rgba(2,6,23,0.32)] ${isDark ? 'border-white/10 bg-slate-950/50' : 'border-slate-200 bg-white/70'}`}
           >
             <div className="flex h-full flex-col">
               <div className={`flex-1 overflow-y-auto rounded-[24px] border p-4 sm:p-6 ${isDark ? 'border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.86))]' : 'border-slate-200 bg-white/80'}`}>
-                <div className="mx-auto flex h-full max-w-3xl flex-col gap-4">
+                <div className="mx-auto flex h-full w-full flex-col gap-4">
                   {messages.map((message, index) => (
                     <TerminalMessage
                       key={`${message.role}-${index}`}
@@ -440,9 +440,9 @@ export default function App() {
                 animate={{ opacity: 1, x: 0, width: 'auto' }}
                 exit={{ opacity: 0, x: 20, width: 0 }}
                 transition={{ duration: 0.24 }}
-                className={`hidden w-80 shrink-0 rounded-[30px] border p-4 backdrop-blur-xl lg:flex ${isDark ? 'border-white/10 bg-slate-950/55' : 'border-slate-200 bg-white/70'}`}
+                className={`hidden md:flex md:w-80 lg:w-[360px] shrink-0 rounded-[30px] border p-4 backdrop-blur-xl ${isDark ? 'border-white/10 bg-slate-950/55' : 'border-slate-200 bg-white/70'}`}
               >
-                <div className="flex w-72 flex-col gap-3">
+                <div className="flex w-full flex-col gap-3 sticky top-24 max-h-[calc(100vh-6rem)] overflow-auto">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold">Workspace</p>

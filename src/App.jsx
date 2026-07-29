@@ -75,7 +75,7 @@ const quickActions = [
 ];
 
 export default function App() {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState('light');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([{ role: 'assistant', content: 'How can I help you today?' }]);
   const [isThinking, setIsThinking] = useState(false);

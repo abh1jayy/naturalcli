@@ -1,8 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+let ai = null;
+
+if (process.env.GEMINI_API_KEY) {
+  ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+  });
+}
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -25,6 +29,13 @@ export default async function handler(req, res) {
       });
     }
 
+    if (!ai) {
+      return res.status(200).json({
+        success: true,
+        reply: `Demo response for: "${prompt}". Configure GEMINI_API_KEY to unlock live AI generation.`,
+      });
+    }
+
     console.log('>> [Gemini] calling model', 'gemini-3.5-flash-lite');
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
@@ -42,6 +53,16 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error(error);
+
+    const message = String(error?.message || "");
+    const isQuotaIssue = /quota|429|resource_exhausted|resource exhausted/i.test(message);
+
+    if (isQuotaIssue) {
+      return res.status(200).json({
+        success: true,
+        reply: "Gemini is temporarily unavailable because the current API quota has been exhausted. Please try again in a few minutes or use a different API key if available.",
+      });
+    }
 
     res.status(500).json({
       success: false,

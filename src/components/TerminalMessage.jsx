@@ -3,22 +3,26 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Copy, Sparkles, UserRound, Bot } from 'lucide-react';
+import { Copy, Sparkles, UserRound, Bot, Bug, Zap, MessageSquare, FileText, Download } from 'lucide-react';
 import { useState } from 'react';
 
 const codeActions = [
   { key: 'copy', label: 'Copy Code', emoji: '📋' },
-  { key: 'explain', label: 'Explain Code', emoji: '✨' },
-  { key: 'debug', label: 'Debug Code', emoji: '🐞' },
-  { key: 'optimize', label: 'Optimize Code', emoji: '⚡' },
-  { key: 'comments', label: 'Add Comments', emoji: '💬' },
-  { key: 'convert', label: 'Convert Language', emoji: '🔄' },
-  { key: 'download', label: 'Download Code', emoji: '⬇' },
 ];
 
-export default function TerminalMessage({ role, content, isStreaming = false, onCodeAction, onDownloadCode }) {
+const responseActions = [
+  { key: 'copy', label: 'Copy Response', icon: Copy },
+  { key: 'explain', label: 'Explain', icon: Sparkles },
+  { key: 'debug', label: 'Debug', icon: Bug },
+  { key: 'optimize', label: 'Optimize', icon: Zap },
+  { key: 'comments', label: 'Add Comments', icon: MessageSquare },
+  { key: 'convert', label: 'Convert', icon: FileText },
+  { key: 'summarize', label: 'Summarize', icon: FileText },
+  { key: 'download', label: 'Download', icon: Download },
+];
+
+export default function TerminalMessage({ role, content, isStreaming = false, onResponseAction }) {
   const [copiedBlock, setCopiedBlock] = useState('');
-  const [pendingAction, setPendingAction] = useState('');
 
   const copyToClipboard = async (value) => {
     try {
@@ -26,25 +30,6 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
       setCopiedBlock(value);
       setTimeout(() => setCopiedBlock(''), 1400);
     } catch {}
-  };
-
-  const handleCodeAction = async (action, code, language) => {
-    if (action === 'copy') {
-      await copyToClipboard(code);
-      return;
-    }
-
-    if (action === 'download') {
-      onDownloadCode?.({ code, language });
-      return;
-    }
-
-    setPendingAction(`${action}-${language}`);
-    try {
-      await onCodeAction?.({ action, code, language });
-    } finally {
-      setPendingAction('');
-    }
   };
 
   const renderCodeBlock = (codeString, language) => {
@@ -65,10 +50,11 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
             <span>code</span>
           </div>
           <button
+            type="button"
             onClick={() => copyToClipboard(codeString)}
             className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] text-slate-300 transition hover:border-cyan-300/40 hover:text-white"
           >
-            {copiedBlock === codeString ? 'Copied' : 'Copy'}
+            {copiedBlock === codeString ? 'Copied' : 'Copy Code'}
           </button>
         </div>
 
@@ -83,29 +69,13 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
         >
           {codeString}
         </SyntaxHighlighter>
-
-        <div className="grid gap-2 border-t border-white/10 bg-slate-950/70 p-2 sm:grid-cols-2 lg:grid-cols-4">
-          {codeActions.map((action) => {
-            const actionKey = `${action.key}-${normalizedLanguage}`;
-            const isBusy = pendingAction === actionKey;
-            return (
-              <button
-                key={action.key}
-                onClick={() => handleCodeAction(action.key, codeString, normalizedLanguage)}
-                disabled={isBusy}
-                className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-2 text-left text-[11px] text-slate-300 transition hover:border-cyan-400/30 hover:bg-cyan-400/10 disabled:opacity-70"
-              >
-                <span className="mr-1">{action.emoji}</span>
-                {action.label}
-              </button>
-            );
-          })}
-        </div>
       </motion.div>
     );
   };
 
   const isUser = role === 'user';
+  const isWelcomeMessage = content?.trim() === 'How can I help you today?';
+  const showToolbar = !isUser && !isStreaming && content?.trim() && !isWelcomeMessage;
 
   return (
     <motion.div
@@ -157,6 +127,24 @@ export default function TerminalMessage({ role, content, isStreaming = false, on
             </ReactMarkdown>
           )}
         </div>
+
+        {showToolbar && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-2 shadow-sm shadow-slate-950/5 dark:border-white/10 dark:bg-white/5">
+            {responseActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.key}
+                  type="button"
+                  onClick={() => onResponseAction?.(action.key, content)}
+                  className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-3 py-2 text-[12px] font-medium text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-950/80 dark:text-slate-200 dark:hover:bg-slate-900"
+                >
+                  <Icon size={14} /> {action.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {isUser && (

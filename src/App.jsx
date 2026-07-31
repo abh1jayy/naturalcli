@@ -75,14 +75,26 @@ const quickActions = [
 ];
 
 export default function App() {
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'light';
+    const stored = window.localStorage.getItem('naturalcli-theme');
+    return stored === 'dark' || stored === 'light' ? stored : 'light';
+  });
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([{ role: 'assistant', content: 'How can I help you today?' }]);
   const [isThinking, setIsThinking] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem('naturalcli-auto-scroll');
+    return stored === 'false' ? false : true;
+  });
+  const [selectedFileContent, setSelectedFileContent] = useState('');
+  const [fileError, setFileError] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [toastMessage, setToastMessage] = useState('');
   const [pinnedResponses, setPinnedResponses] = useState([]);
   const fileInputRef = useRef(null);
   const endRef = useRef(null);
@@ -90,15 +102,29 @@ export default function App() {
   const isEmptyState = messages.length === 1 && messages[0].content === 'How can I help you today?';
   const isDark = theme === 'dark';
 
-  // Apply dark class to document for Tailwind dark: utilities
   useEffect(() => {
     try {
-      if (isDark) document.documentElement.classList.add('dark');
-      else document.documentElement.classList.remove('dark');
-    } catch (e) {
-      // ignore
+      window.localStorage.setItem('naturalcli-theme', theme);
+    } catch {
+      // ignore storage errors
     }
-  }, [isDark]);
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [isDark, theme]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('naturalcli-auto-scroll', String(autoScroll));
+    } catch {
+      // ignore storage errors
+    }
+  }, [autoScroll]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = window.setTimeout(() => setToastMessage(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
 
   useEffect(() => {
     if (autoScroll) {
@@ -117,24 +143,41 @@ export default function App() {
 
   const submitPrompt = async (promptOverride) => {
     const prompt = (promptOverride ?? input).trim();
-    if (!prompt) return;
+    if (!prompt || isThinking) return;
 
     setMessages((prev) => [...prev, { role: 'user', content: prompt }]);
     setInput('');
     setIsThinking(true);
+    setToastMessage('Sending request...');
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, fileContent: selectedFileContent }),
+        signal: controller.signal,
       });
-      const data = await response.json();
-      const reply = data.reply || 'I could not produce a response right now.';
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const errorMessage = data?.error || `Server returned ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      const reply = data?.reply || 'I could not produce a response right now.';
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'The connection to the AI service was interrupted. Please try again.' }]);
+      setToastMessage('Response received.');
+    } catch (error) {
+      const message = error?.name === 'AbortError'
+        ? 'Request timed out. Please try again.'
+        : error?.message || 'The connection to the AI service was interrupted. Please try again.';
+      setMessages((prev) => [...prev, { role: 'assistant', content: message }]);
+      setToastMessage(message);
     } finally {
+      window.clearTimeout(timeoutId);
       setIsThinking(false);
     }
   };
@@ -178,8 +221,16 @@ export default function App() {
 
     if (action === 'copy') {
       const responseToCopy = lastAssistant || lastUser;
-      if (!responseToCopy) return;
-      navigator.clipboard.writeText(responseToCopy);
+      if (!responseToCopy) {
+        setToastMessage('Nothing available to copy.');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(responseToCopy);
+        setToastMessage('Copied to clipboard.');
+      } catch {
+        setToastMessage('Failed to copy to clipboard.');
+      }
       return;
     }
 
@@ -202,7 +253,71 @@ export default function App() {
       prompt = `Rewrite the user's last prompt into a more effective AI prompt.\n\n${lastUser}`;
     }
 
-    if (!prompt) return;
+    if (!prompt || !prompt.trim()) {
+      setToastMessage('Nothing to process. Start by entering a prompt or selecting a quick action.');
+      return;
+    }
+
+    const noContext = !code && !lastAssistant && !lastUser;
+    const needsContext = ['explain', 'debug', 'optimize', 'comments', 'convert', 'summarize', 'improve'].includes(action);
+    if (needsContext && noContext) {
+      setToastMessage('Please send a prompt first before using this action.');
+      return;
+    }
+
+    await submitPrompt(prompt);
+  };
+
+  const handleResponseAction = async (action, content) => {
+    if (!content || !content.trim()) {
+      setToastMessage('Nothing available to use for this action.');
+      return;
+    }
+
+    if (action === 'copy') {
+      try {
+        await navigator.clipboard.writeText(content);
+        setToastMessage('Copied full response.');
+      } catch {
+        setToastMessage('Failed to copy response.');
+      }
+      return;
+    }
+
+    if (action === 'download') {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'response.txt';
+      link.click();
+      URL.revokeObjectURL(url);
+      setToastMessage('Downloaded response.');
+      return;
+    }
+
+    let prompt = '';
+    if (action === 'explain') {
+      prompt = `Explain the following response in simple terms for a beginner while preserving the original meaning.\n\n${content}`;
+    } else if (action === 'debug') {
+      prompt = `Analyze the following response and identify any issues or improvements.\n\n${content}`;
+    } else if (action === 'optimize') {
+      prompt = `Optimize the following response for clarity, structure, and readability.\n\n${content}`;
+    } else if (action === 'comments') {
+      prompt = `Rewrite the following response with clear comments or annotations that explain each part.\n\n${content}`;
+    } else if (action === 'convert') {
+      const targetLanguage = window.prompt('Which language should I convert the response to?');
+      if (!targetLanguage) return;
+      prompt = `Convert the following response to ${targetLanguage}. Preserve the original meaning.\n\n${content}`;
+    } else if (action === 'summarize') {
+      prompt = `Summarize the following response clearly and concisely.\n\n${content}`;
+    }
+
+    if (!prompt.trim()) {
+      setToastMessage('Action canceled.');
+      return;
+    }
+
     await submitPrompt(prompt);
   };
 
@@ -210,8 +325,43 @@ export default function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setSelectedFileName(file.name);
-    setMessages((prev) => [...prev, { role: 'user', content: `Attached file: ${file.name}` }]);
+    const allowedTypes = ['text/plain', 'text/markdown', 'application/json', 'application/javascript', 'application/x-javascript', 'text/javascript', 'text/csv'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    if (file.size > maxSize) {
+      setFileError('File is too large. Please upload files smaller than 5MB.');
+      event.target.value = '';
+      return;
+    }
+
+    if (!allowedTypes.some((type) => file.type === type) && !file.name.match(/\.(txt|md|json|js|jsx|ts|tsx|csv|sql|py)$/i)) {
+      setFileError('Unsupported file type. Please upload a supported text or code file.');
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    setUploadProgress(0);
+
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    reader.onload = () => {
+      const fileContent = String(reader.result || '');
+      setSelectedFileName(file.name);
+      setSelectedFileContent(fileContent.slice(0, 200000));
+      setFileError('');
+      setUploadProgress(100);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `File uploaded: ${file.name}. You can now ask questions about it.` }]);
+      setToastMessage(`Uploaded ${file.name}`);
+    };
+    reader.onerror = () => {
+      setFileError('There was an error reading the file. Please try again.');
+      setUploadProgress(0);
+    };
+    reader.readAsText(file);
     event.target.value = '';
   };
 
@@ -219,7 +369,10 @@ export default function App() {
     setMessages([{ role: 'assistant', content: 'How can I help you today?' }]);
     setInput('');
     setSelectedFileName('');
+    setSelectedFileContent('');
+    setFileError('');
     setIsThinking(false);
+    setToastMessage('Started a new chat.');
   };
 
   const handlePinResponse = (response) => {
@@ -228,6 +381,12 @@ export default function App() {
   };
 
   const handleKeyDown = (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      setInput('');
+      setToastMessage('Input cleared.');
+      return;
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       submitPrompt();
@@ -238,6 +397,13 @@ export default function App() {
     <div className="min-h-screen transition-colors duration-500 bg-white text-slate-900 dark:bg-[#030712] dark:text-white">
       <AnimatedBackground />
       <div className="w-[96%] mx-auto flex min-h-screen flex-col px-6 lg:px-10 py-4">
+        {toastMessage && (
+          <div className="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+            <div role="status" className="rounded-2xl border border-slate-200 bg-slate-950/95 px-4 py-3 text-sm text-white shadow-xl shadow-slate-950/20 dark:border-white/10">
+              {toastMessage}
+            </div>
+          </div>
+        )}
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -274,7 +440,7 @@ export default function App() {
                 <Plus size={16} /> New chat
               </button>
               <button
-                onClick={() => window.open('https://github.com', '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open('https://github.com/abhjayy/naturalcli', '_blank', 'noopener,noreferrer')}
                 className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition hover:-translate-y-0.5 border-slate-300 bg-white dark:border-gray-700 dark:bg-white/10"
               >
                 <Orbit size={16} /> GitHub
@@ -306,7 +472,7 @@ export default function App() {
               >
                 Auto-scroll {autoScroll ? 'On' : 'Off'}
               </button>
-              <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Streaming responses enabled</span>
+              <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{autoScroll ? 'Auto-scroll is enabled' : 'Auto-scroll is disabled'}</span>
             </motion.div>
           )}
         </motion.header>
@@ -327,7 +493,7 @@ export default function App() {
                       content={message.content}
                       onCodeAction={handleCodeAction}
                       onDownloadCode={handleDownloadCode}
-                      onPinResponse={handlePinResponse}
+                      onResponseAction={handleResponseAction}
                     />
                   ))}
                   {isThinking && <TerminalMessage role="assistant" content="" isStreaming />}
@@ -370,8 +536,8 @@ export default function App() {
                             <FileText size={15} className="text-cyan-400" /> Supported file types
                           </div>
                           <div className="space-y-2 text-sm text-slate-400">
-                            <div>Images, PDFs, text files, code snippets</div>
-                            <div>CSV, JSON, SQL, Markdown, Python</div>
+                            <div>Plain text, Markdown, JSON, JavaScript, Python, SQL, CSV</div>
+                            <div>Text and code files only, up to 5MB.</div>
                           </div>
                         </div>
                         <div className="rounded-[22px] border p-4 border-slate-200 bg-slate-50 dark:border-gray-700 dark:bg-[#1F2937]">
@@ -411,6 +577,25 @@ export default function App() {
                     Attached: {selectedFileName}
                   </div>
                 )}
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="mb-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div className="h-2 rounded-full bg-cyan-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {uploadProgress === 100 && !fileError && (
+                  <div className="mb-2 text-xs text-slate-500">Upload complete.</div>
+                )}
+                {fileError && (
+                  <div className="mb-2 text-xs text-red-500">{fileError}</div>
+                )}
+                {uploadProgress > 0 && !fileError && uploadProgress < 100 && (
+                  <div className="mb-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div className="h-2 rounded-full bg-cyan-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                )}
+                {uploadProgress === 100 && !fileError && (
+                  <div className="mb-2 text-xs text-slate-500">Upload complete.</div>
+                )}
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" />
@@ -423,20 +608,23 @@ export default function App() {
                   </button>
 
                   <div className="flex flex-1 items-center gap-2 rounded-2xl border px-3 py-2.5 border-slate-200 bg-slate-50 dark:border-gray-700 dark:bg-[#111827]">
-                    <input
+                    <textarea
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Ask anything..."
-                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                      rows={2}
+                      className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-slate-500 dark:placeholder:text-slate-400"
                     />
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => submitPrompt()}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:-translate-y-0.5"
+                    disabled={isThinking}
+                    className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:-translate-y-0.5 ${isThinking ? 'cursor-not-allowed opacity-60 bg-slate-300 dark:bg-slate-700' : 'bg-gradient-to-r from-cyan-500 to-emerald-400'}`}
                   >
-                    <Send size={16} /> Send
+                    <Send size={16} /> {isThinking ? 'Sending...' : 'Send'}
                   </button>
                 </div>
               </div>

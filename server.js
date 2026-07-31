@@ -34,14 +34,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
-
-app.get("/*splat", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
-
 app.get("/health", (req, res) => {
   res.json({
     success: true,
@@ -51,7 +43,7 @@ app.get("/health", (req, res) => {
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, fileContent } = req.body;
 
     if (!prompt) {
       return res.status(400).json({
@@ -59,6 +51,14 @@ app.post("/api/chat", async (req, res) => {
         error: "Prompt is required.",
       });
     }
+
+    const finalPrompt = fileContent && String(fileContent).trim()
+      ? `Use the attached file content to answer the user's request. File content:
+${String(fileContent).slice(0, 200000)}
+
+User prompt:
+${prompt}`
+      : prompt;
 
     if (!ai) {
       return res.json({
@@ -68,17 +68,22 @@ app.post("/api/chat", async (req, res) => {
     }
 
     console.log('>> [Gemini] calling model', 'gemini-3.5-flash-lite');
-    console.log('>> [Gemini] request contents preview:', String(prompt).slice(0, 2000));
+    console.log('>> [Gemini] request contents preview:', String(finalPrompt).slice(0, 2000));
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash-lite",
-      contents: prompt,
+      contents: finalPrompt,
     });
 
     console.log('<< [Gemini] raw response:', response);
 
-    // Guard: attempt to extract text in multiple possible fields
-    const replyText = (response && (response.text || response.outputText || response.response || response[0]?.text)) || JSON.stringify(response);
+    const replyText =
+      response?.text ||
+      response?.outputText ||
+      response?.response ||
+      response?.candidates?.[0]?.content?.[0]?.text ||
+      response?.[0]?.text ||
+      JSON.stringify(response);
 
     console.log('<< [API] sending reply preview:', String(replyText).slice(0, 2000));
 
@@ -86,9 +91,18 @@ app.post("/api/chat", async (req, res) => {
       success: true,
       reply: replyText,
     });
-
   } catch (err) {
     console.error("Gemini Error:", err);
+
+    const message = String(err?.message || "");
+    const isQuotaIssue = /quota|429|resource_exhausted|resource exhausted/i.test(message);
+
+    if (isQuotaIssue) {
+      return res.status(200).json({
+        success: true,
+        reply: "Gemini is temporarily unavailable because the current API quota has been exhausted. Please try again in a few minutes or use a different API key if available.",
+      });
+    }
 
     res.status(500).json({
       success: false,
@@ -96,6 +110,14 @@ app.post("/api/chat", async (req, res) => {
       details: err,
     });
   }
+});
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
+
+app.get("/*splat", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
 app.listen(PORT, () => {
